@@ -25,3 +25,13 @@ function usage {
 	$fh.close()
 }
 
+###############################################################################
+#
+# add2Log MESSAGE
+###############################################################################
+function add2Log {
+  Param([string]$msg = "")
+  $now = get-date -uFormat "%Y/%m/%d %H:%M:%S"
+  $now + ":" + "[" + $PID + "]" + " " + $msg |
+    Out-File $global:$logPath -encoding Default -append -ErrorAction Stop
+}
