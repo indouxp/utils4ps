@@ -9,7 +9,6 @@
 #
 ###############################################################################
 #param($pattern = $(throw "Please specify content to search for"))
-#param($pattern)
 
 # ‹¤’Êƒ‰ƒCƒuƒ‰ƒŠ‚Ì“Ç‚İ‚İ
 . (Join-Path (Split-Path $MyInvocation.MyCommand.Path) "cmn010.ps1")
