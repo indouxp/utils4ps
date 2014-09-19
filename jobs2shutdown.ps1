@@ -17,7 +17,9 @@
 [string]$MyPath = $MyInvocation.MyCommand.Path
 [string]$MyName = $MyInvocation.MyCommand.Name
 [string]$MyDir = Split-Path $MyPath
-[string]$logPath = Join-Path "C:\Users\indou\Documents" ($MyName + ".log")
+[string]$confPath = Join-Path $MyDir ($MyName -replace ".ps1", ".conf")
+[string]$logDir = "C:\Users\indou\Documents"
+[string]$logPath = Join-Path $logDir ($MyName + ".log")
 . (Join-Path $MyDir "cmn010.ps1")
 [string]$semaphorePath = Join-Path "C:\" $MyName
 ###############################################################################
@@ -30,64 +32,51 @@ trap {
 }
 ###############################################################################
 function main {
-  param([array]$jobs)
+  param([array]$shutdown)
   try {
     new-item $semaphorePath -type directory > $null
     add2Log "START"
-    add2Log $jobs
+    add2Log $shutdown
+    $hosts = @()
+    $commands = @()
+    $options = @()
     $waits = @{}  # hash
-    foreach ($job in $jobs) {
-      switch($job) {
-        "backup" {
+    analyseConf $confPath ([ref]$hosts) ([ref]$commands) ([ref]$options)
+    for ($i = 0; $i -lt $hosts.length; $i++) {
+      $myHost = hostname
+      if ($myHost -eq $hosts[$i]) {
+        if ($commands[$i] -ne "shutdown" -and $commands[$i] -ne "noshutdown") {
+          $command_name = Split-Path -Leaf ($commands[$i])
+          $stdoutPath = Join-Path $logDir ($MyName + "." + $command_name + "." + $i + ".stdout.log")
+          $stderrPath = Join-Path $logDir ($MyName + "." + $command_name + "." + $i + ".stderr.log")
+          $waits[($command_name + $i)] = `
+              Start-Process                       `
+                      -FilePath $commands[$i]     `
+                      -ArgumentList $options[$i]  `
+                      -PassThru                   `
+                      -RedirectStandardOutput $stdoutPath `
+                      -RedirectStandardError $stderrPath  `
+                      -NoNewWindow
+          add2Log ("start " + $command_name + $i)
         }
-        "defrag" {
-          switch(hostname) {
-            "cf-t9" {
-              # /H  この操作を "通常" の優先度で実行します (既定では "低")。
-              # /U  操作の進行状況を画面に表示します。
-              # /V  断片化の統計情報を含む詳細を出力します。
-              # /X  指定したボリュームの空き領域の統合を実行します。
-              $arguments = "c: /v /h /x"
-              $proc = Start-Process                 `
-                          -FilePath "defrag"        `
-                          -ArgumentList $arguments  `
-                          -PassThru                 `
-                          -RedirectStandardOutput defrag.c.stdout.txt `
-                          -RedirectStandardError defrag.c.stderr.txt  `
-                          -NoNewWindow
-              add2Log "defrag c" + $proc
-              $waits["defrag c"] = $proc
-              $arguments = "d: /v /h /x"
-              $proc = Start-Process                 `
-                          -FilePath "defrag"        `
-                          -ArgumentList $arguments  `
-                          -PassThru                 `
-                          -RedirectStandardOutput defrag.c.stdout.txt `
-                          -RedirectStandardError defrag.c.stderr.txt  `
-                          -NoNewWindow
-              add2Log "defrag d" + $proc
-              $waits["defrag d"] = $proc
-            } # cf-t9
-          } # switch
-        } # defrag
-      } # switch
-    } # foreach 
-    foreach($run in $waits.keys) {
-      $id = $waits[$run].Id
-      "wait.. $run"
-      try {
-        Wait-Process -Id $id
-        "$run done"
-      } catch [Exception] {
-        "$run process not exist"
-      } finally {
-        add2Log ($run + " ExitCode:" + $waits[$run].ExitCode)
       }
     }
-    foreach ($job in $jobs) {
+    foreach($command_name in $waits.keys) {
+      $id = $waits[$command_name].Id
+      "wait.. $command_name"
+      try {
+        Wait-Process -Id $id
+        "$command_name done"
+      } catch [Exception] {
+        "$command_name process not exist"
+      } finally {
+        add2Log ($command_name + " ExitCode:" + $waits[$command_name].ExitCode)
+      }
+    }
+    foreach ($job in $shutdown) {
       if ($job -eq "shutdown") {
+        Start-Process -FilePath "shutdown" -ArgumentList "/s /c $MyName"
         add2Log "shutdown"
-        #Start-Process -FilePath "shutdown" -ArgumentList "/s /c $MyName"
       }
     }
     add2Log "SUCCESS"
@@ -104,13 +93,14 @@ function main {
   exit 0
 }
 ###############################################################################
+# 引数のチェック
+###############################################################################
 function chkArgs {
-  param([array]$jobs)
-  foreach ($job in $jobs) {
+  param([array]$shutdown)
+  foreach ($job in $shutdown) {
     switch($job) {
+      "noshutdown" {}
       "shutdown" {}
-      "backup" {}
-      "defrag" {}
       default {
         $MyPath
         usage $MyPath
@@ -119,6 +109,41 @@ function chkArgs {
     }
   } 
 }
+###############################################################################
+# $confPathを読み込み、第一フィールドをホスト名、第二フィールドをコマンド、
+# 第三フィールドをコマンドのオプションとして取得。
+# それぞれを配列への参照に代入して戻す
+###############################################################################
+function analyseConf {
+  param([string]$confPath, [ref]$hosts, [ref]$commands, [ref]$options)
+
+  $conf = (Get-Content $confPath) -as [string[]]
+
+  $index_no = 0
+  foreach ($line in $conf) {
+    $fields = $line.split(",") # ,でsplit
+    $comment = $false
+    $option = ""
+    $col_count = 0
+    foreach ($field in $fields) {
+      if ($col_count -eq 0 -and $field -match "^#") { # 第一フィールドが^#にマッチする
+        $comment = $true
+        break
+      }
+      switch ($col_count) {
+        0 { $hosts.value += $field }          # 第一フィールド
+        1 { $commands.value += $field }       # 第二フィールド
+        default { $option += ($field + " ") } # 第三フィールド以降
+      }
+      $col_count++
+    }
+    if ($comment -ne $true) {
+      $options.value += $option               # 第三フィールド以降
+      $index_no++  
+    }
+  }
+}
+
 ###############################################################################
 Set-PSDebug -strict
 if ($args.length -ne 0) {
