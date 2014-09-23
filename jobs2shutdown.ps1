@@ -49,7 +49,7 @@ function main {
           $command_name = Split-Path -Leaf ($commands[$i])
           $stdoutPath = Join-Path $logDir ($MyName + "." + $command_name + "." + $i + ".stdout.log")
           $stderrPath = Join-Path $logDir ($MyName + "." + $command_name + "." + $i + ".stderr.log")
-          $waits[($command_name + $i)] = `
+          $p =                                    `
               Start-Process                       `
                       -FilePath $commands[$i]     `
                       -ArgumentList $options[$i]  `
@@ -57,7 +57,12 @@ function main {
                       -RedirectStandardOutput $stdoutPath `
                       -RedirectStandardError $stderrPath  `
                       -NoNewWindow
-          add2Log ("start " + $command_name + $i)
+          add2Log ("start " + $commands[$i] + "-" + $options[$i])
+          add2Log ("  StartTime:" + $p.StartTime)
+          add2Log ("  stdout:" + $stdoutPath)
+          add2Log ("  stderr:" + $stderrPath)
+          add2Log ("  pid:" + $p.id)
+          $waits[($command_name + $i)] = $p
         }
       }
     }
@@ -67,6 +72,7 @@ function main {
       try {
         Wait-Process -Id $id
         "$command_name done"
+        add2Log ($command_name + " ExitTime:" + $waits[$command_name].ExitTime)
       } catch [Exception] {
         "$command_name process not exist"
       } finally {
