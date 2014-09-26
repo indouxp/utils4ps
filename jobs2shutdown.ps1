@@ -49,28 +49,28 @@ function main {
         $ps += New-Object System.Diagnostics.Process
         $ps[$j].StartInfo = $psinfo[$j]
         $ps[$j].Start() | Out-Null
-	add2Log ("start:" + $commands[$i] + " " + $options[$i] + " pid:" + $ps[$j].pid)
-	$j++
+        add2Log ("start:" + $commands[$i] + " " + $options[$i] + " pid:" + $ps[$j].pid)
+        $j++
       }
     }
     $j = 0
     for ($i = 0; $i -lt $hosts.length; $i++) {
       $hostname = hostname
       if ($hostname -eq $hosts[$i]) {
-	$msg = ""
+        $msg = ""
         $msg = ("wait " + $commands[$i] + " " + $options[$i])
-	$msg
-	add2Log $msg
+        $msg
+        add2Log $msg
 
         $ps[$j].WaitForExit()
 
-	$msg = ""
+        $msg = ""
         $msg += ($ps[$j].StartTime.toString("yyyy/MM/dd HH:mm:ss"))
         $msg += "-"
         $msg += ($ps[$j].ExitTime.toString("yyyy/MM/dd HH:mm:ss"))
         $msg += (" status was " + $ps[$j].ExitCode)
-	$msg
-	add2Log $msg
+        $msg
+        add2Log $msg
 
         $command_name = Split-Path -Leaf ($commands[$i])
         $stdoutPath = Join-Path $logDir ($MyName + "." + $command_name + "." + $j + ".stdout.log")
@@ -79,7 +79,8 @@ function main {
         $out | Out-File $stdoutPath
         $err = $ps[$j].StandardError.ReadtoEnd()
         $err | Out-File $stderrPath
-	$j++
+
+        $j++
       }
     }
     foreach ($job in $shutdown) {
