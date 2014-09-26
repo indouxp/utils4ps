@@ -1,6 +1,10 @@
 param($dirPath = ".")
 
-$tmpPath = "d:\tmp\"
+switch (hostname) {
+  "vipi7920p6t" { $tmpPath = "~\tmp\"  }
+  "cf-t9"       { $tmpPath = "d:\tmp\" }
+  default       { throw hostname       }
+}
 
 $files = gci $dirPath -recurse | where { $_.Name -match "~$" }
 
