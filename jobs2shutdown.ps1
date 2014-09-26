@@ -95,12 +95,12 @@ function main {
     add2Log ("Exception:" + $Error[0].Exception)
     add2Log ("InvocationInfo.Line:" + $Error[0].InvocationInfo.Line)
     add2Log ("InvocationInfo.PositionMessage:" + $Error[0].InvocationInfo.PositionMessage)
-    exit 1
+    return 1
   } finally {
     remove-item $semaphorePath
     add2Log "DONE"
   }
-  exit 0
+  return 0
 }
 ###############################################################################
 # 引数のチェック
@@ -155,10 +155,13 @@ function analyseConf {
 }
 
 ###############################################################################
-Set-PSDebug -strict
+set-psdebug -strict # 変数初期化の強制
 if ($args.length -ne 0) {
   chkArgs $args
-  main $args
+  $rc = main $args
 } else {
   usage $MyPath
+  $rc = 1
 }
+set-psdebug -off  # 変数初期化の強制OFF
+exit $rc
